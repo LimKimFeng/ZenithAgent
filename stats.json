@@ -1,0 +1,9 @@
+{
+  "project_name": "ZenithAgent-TernakProperty",
+  "last_reset": "2026-01-12T21:37:44.240645195+07:00",
+  "success_count": 1,
+  "failed_count": 1,
+  "fail_reasons": [
+    "Frame.Goto https://ternakproperty.com/as-bandung?utm_source=fb\u0026utm_medium=mof\u0026utm_campaign=mof_seminarbandung\u0026utm_content=vidbeforeafterv1: playwright: timeout: Timeout 30000ms exceeded."
+  ]
+}

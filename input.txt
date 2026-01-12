@@ -1,0 +1,18 @@
+Contoh Isian (Input)
+Input SMTP User: Isi dengan alamat email pengirim.
+Contoh: zenith.bot.tester@gmail.com
+
+Input SMTP Password: Jika menggunakan Gmail, jangan gunakan password email biasa. Gunakan App Password (16 digit kode dari Google Account Settings).
+Contoh: abcd efgh ijkl mnop
+
+Input Email Penerima Laporan: Email pribadi Anda untuk menerima laporan harian (stats.json).
+Contoh: pemilik.bot@email.com
+
+Interval eksekusi (menit): Seberapa sering bot harus berjalan otomatis.
+Contoh: 15 (Artinya bot jalan setiap 15 menit).
+
+Gunakan Headless mode? (y/n):
+y: Browser tidak akan muncul (cocok untuk VPS).
+n: Browser akan muncul (cocok untuk testing di laptop sendiri agar bisa melihat proses kliknya).
+Contoh: y
+
