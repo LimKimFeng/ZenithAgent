@@ -24,6 +24,9 @@ func (bm *BrowserManager) CreateContext() (*playwright.Playwright, playwright.Br
 			"--disable-blink-features=AutomationControlled",
 			"--no-sandbox",
 		},
+		Proxy: &playwright.Proxy{
+			Server: "socks5://127.0.0.1:9050",
+		},
 	})
 	if err != nil {
 		pw.Stop()
