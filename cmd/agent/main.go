@@ -10,6 +10,7 @@ import (
 	"time"
 	"zenith-agent/internal/engine"
 	"zenith-agent/internal/manager"
+	"zenith-agent/internal/monitor"
 	"zenith-agent/internal/network"
 	"zenith-agent/internal/notify"
 	"zenith-agent/internal/tasks"
@@ -69,6 +70,9 @@ func main() {
 		
 		// Start Tor Rotator (Background) with Password
 		go network.StartRotator(10, torPass)
+
+		// Start Dashboard Server (Background)
+		monitor.StartDashboard("8080")
 	}
 
 	// Inisialisasi Notify & Engine

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -12,14 +13,24 @@ var (
 	statsFile  = "stats.json"
 )
 
+type HistoryEntry struct {
+	Message   string `json:"message"`
+	Project   string `json:"project"`
+	Type      string `json:"type"` // "success" or "failed"
+	Timestamp string `json:"timestamp"`
+}
+
 type ProjectStats struct {
-	SuccessCount int      `json:"success_count"`
-	FailedCount  int      `json:"failed_count"`
-	FailReasons  []string `json:"fail_reasons"`
+	SuccessCount int       `json:"success_count"`
+	FailedCount  int       `json:"failed_count"`
+	FailReasons  []string  `json:"fail_reasons"`
+	IsRunning    bool      `json:"is_running"` // New: Running Status
+	LastRun      time.Time `json:"last_run"`   // New: Last Execution Time
 }
 
 type GlobalStats struct {
 	Projects map[string]*ProjectStats `json:"projects"`
+	History  []HistoryEntry           `json:"history"` // New: Activity Log
 }
 
 // UpdateStats updates the stats for a specific project
@@ -35,7 +46,6 @@ func UpdateStats(projectName string, success bool, reason string) {
 		json.Unmarshal(data, &gs)
 	}
 
-	// Initialize separate project map if nil (for existing file migration or fresh start)
 	if gs.Projects == nil {
 		gs.Projects = make(map[string]*ProjectStats)
 	}
@@ -45,6 +55,11 @@ func UpdateStats(projectName string, success bool, reason string) {
 	}
 
 	p := gs.Projects[projectName]
+	
+	// Always update LastRun and assume running since we just finished a task cycle
+	p.LastRun = time.Now()
+	p.IsRunning = true // Helper logic; in real app main loop controls this, but simplistically true here.
+
 	if success {
 		p.SuccessCount++
 	} else {
@@ -65,6 +80,33 @@ func UpdateStats(projectName string, success bool, reason string) {
 		if !exists {
 			p.FailReasons = append(p.FailReasons, cleanReason)
 		}
+	}
+
+	// Update History Log
+	msg := "Task Executed Successfully"
+	typeStr := "success"
+	if !success {
+		msg = "Task Failed: " + reason
+		typeStr = "failed"
+		// Truncate msg if too long for UI
+		if len(msg) > 60 {
+			msg = msg[:57] + "..."
+		}
+	}
+
+	entry := HistoryEntry{
+		Message:   msg,
+		Project:   projectName,
+		Type:      typeStr,
+		Timestamp: time.Now().Format("15:04:05"),
+	}
+
+	// Prepend to history (newest first)
+	gs.History = append([]HistoryEntry{entry}, gs.History...)
+	
+	// Keep last 50 entries
+	if len(gs.History) > 50 {
+		gs.History = gs.History[:50]
 	}
 
 	newData, _ := json.MarshalIndent(gs, "", "  ")
