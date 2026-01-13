@@ -104,18 +104,19 @@ func runTask(bm *engine.BrowserManager, n *notify.EmailNotifier, choice string) 
 	var pName string
 	
 	if choice == "2" {
-		pName = "ZenithAgent-ScalpingSR"
+		pName = "Scalping SR"
 		err = tasks.ExecuteScalpingSR(bm)
 	} else {
-		pName = "ZenithAgent-TernakProperty"
+		pName = "TernakProperty"
 		err = tasks.ExecuteTernakProperty(bm)
 	}
 
+	tasks.GlobalUpdateStats(pName, err == nil, "") 
+
 	if err != nil {
 		log.Printf("Task Error: %v", err)
-		tasks.UpdateStats(pName, false, err.Error())
+		tasks.GlobalUpdateStats(pName, false, err.Error())
 	} else {
 		fmt.Println("Task Success!")
-		tasks.UpdateStats(pName, true, "")
 	}
 }

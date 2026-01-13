@@ -22,6 +22,9 @@ func generateSmartReason() string {
 }
 
 func ExecuteTernakProperty(bm *engine.BrowserManager) error {
+    // Set status running di dashboard
+    SetProjectStatus("TernakProperty", true)
+
 	pw, browser, context, err := bm.CreateContext()
 	if err != nil {
 		return err
@@ -86,6 +89,9 @@ func ExecuteTernakProperty(bm *engine.BrowserManager) error {
 	err = page.WaitForURL("**/success", playwright.PageWaitForURLOptions{
 		Timeout: playwright.Float(30000),
 	})
+	
+	// Set status ke false setelah selesai
+	SetProjectStatus("TernakProperty", false)
 	
 	return err
 }

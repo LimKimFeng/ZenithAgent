@@ -8,39 +8,37 @@ import (
 	"time"
 )
 
+type LogEntry struct {
+	Timestamp string `json:"timestamp"`
+	Project   string `json:"project"`
+	Message   string `json:"message"`
+	Type      string `json:"type"` // "success" or "error"
+}
+
+type ProjectStats struct {
+	IsRunning    bool      `json:"is_running"`
+	SuccessCount int       `json:"success_count"`
+	FailedCount  int       `json:"failed_count"`
+	FailReasons  []string  `json:"fail_reasons"`
+	LastRun      time.Time `json:"last_run"`
+}
+
+type GlobalStats struct {
+	Projects map[string]*ProjectStats `json:"projects"`
+	History  []LogEntry               `json:"history"`
+}
+
 var (
 	statsMutex sync.Mutex
 	statsFile  = "stats.json"
 )
 
-type HistoryEntry struct {
-	Message   string `json:"message"`
-	Project   string `json:"project"`
-	Type      string `json:"type"` // "success" or "failed"
-	Timestamp string `json:"timestamp"`
-}
-
-type ProjectStats struct {
-	SuccessCount int       `json:"success_count"`
-	FailedCount  int       `json:"failed_count"`
-	FailReasons  []string  `json:"fail_reasons"`
-	IsRunning    bool      `json:"is_running"` // New: Running Status
-	LastRun      time.Time `json:"last_run"`   // New: Last Execution Time
-}
-
-type GlobalStats struct {
-	Projects map[string]*ProjectStats `json:"projects"`
-	History  []HistoryEntry           `json:"history"` // New: Activity Log
-}
-
-// UpdateStats updates the stats for a specific project
-func UpdateStats(projectName string, success bool, reason string) {
+// GlobalUpdateStats menyimpan data ke format yang dimengerti dashboard
+func GlobalUpdateStats(projectName string, success bool, reason string) {
 	statsMutex.Lock()
 	defer statsMutex.Unlock()
 
 	var gs GlobalStats
-	gs.Projects = make(map[string]*ProjectStats)
-
 	data, err := os.ReadFile(statsFile)
 	if err == nil {
 		json.Unmarshal(data, &gs)
@@ -55,21 +53,24 @@ func UpdateStats(projectName string, success bool, reason string) {
 	}
 
 	p := gs.Projects[projectName]
-	
-	// Always update LastRun and assume running since we just finished a task cycle
 	p.LastRun = time.Now()
-	p.IsRunning = true // Helper logic; in real app main loop controls this, but simplistically true here.
+	p.IsRunning = true
+
+	msg := "Eksekusi Berhasil"
+	logType := "success"
 
 	if success {
 		p.SuccessCount++
 	} else {
 		p.FailedCount++
+		logType = "error"
+		msg = "Gagal: " + reason
+		
 		cleanReason := reason
 		if idx := strings.Index(reason, ":"); idx != -1 {
 			cleanReason = reason[:idx]
 		}
 		
-		// Check for duplicate reasons
 		exists := false
 		for _, r := range p.FailReasons {
 			if r == cleanReason {
@@ -82,33 +83,36 @@ func UpdateStats(projectName string, success bool, reason string) {
 		}
 	}
 
-	// Update History Log
-	msg := "Task Executed Successfully"
-	typeStr := "success"
-	if !success {
-		msg = "Task Failed: " + reason
-		typeStr = "failed"
-		// Truncate msg if too long for UI
-		if len(msg) > 60 {
-			msg = msg[:57] + "..."
-		}
-	}
-
-	entry := HistoryEntry{
-		Message:   msg,
+	// Tambah ke History (Maksimal 50 log)
+	newLog := LogEntry{
+		Timestamp: time.Now().Format("02 Jan 15:04:05"),
 		Project:   projectName,
-		Type:      typeStr,
-		Timestamp: time.Now().Format("15:04:05"),
+		Message:   msg,
+		Type:      logType,
 	}
-
-	// Prepend to history (newest first)
-	gs.History = append([]HistoryEntry{entry}, gs.History...)
-	
-	// Keep last 50 entries
+	gs.History = append([]LogEntry{newLog}, gs.History...)
 	if len(gs.History) > 50 {
 		gs.History = gs.History[:50]
 	}
 
 	newData, _ := json.MarshalIndent(gs, "", "  ")
 	os.WriteFile(statsFile, newData, 0644)
+}
+
+func SetProjectStatus(projectName string, running bool) {
+	statsMutex.Lock()
+	defer statsMutex.Unlock()
+	
+	var gs GlobalStats
+	data, err := os.ReadFile(statsFile)
+	if err == nil {
+		json.Unmarshal(data, &gs)
+		if gs.Projects != nil {
+			if p, ok := gs.Projects[projectName]; ok {
+				p.IsRunning = running
+				newData, _ := json.MarshalIndent(gs, "", "  ")
+				os.WriteFile(statsFile, newData, 0644)
+			}
+		}
+	}
 }

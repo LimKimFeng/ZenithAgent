@@ -22,6 +22,9 @@ func generateScalpingReason() string {
 }
 
 func ExecuteScalpingSR(bm *engine.BrowserManager) error {
+	// Set status running di dashboard
+	SetProjectStatus("Scalping SR", true)
+
 	pw, browser, context, err := bm.CreateContext()
 	if err != nil { return err }
 	defer pw.Stop()
@@ -73,8 +76,12 @@ func ExecuteScalpingSR(bm *engine.BrowserManager) error {
 	err = page.Click("button:has-text('Ambil Sistemnya')")
 	if err != nil { return fmt.Errorf("submit_btn_failed") }
 
+
 	// 6. Success Detection
 	err = page.WaitForURL("**/success", playwright.PageWaitForURLOptions{Timeout: playwright.Float(30000)})
+	
+	SetProjectStatus("Scalping SR", false)
+
 	if err != nil { return fmt.Errorf("failed_success_redirect") }
 
 	return nil
