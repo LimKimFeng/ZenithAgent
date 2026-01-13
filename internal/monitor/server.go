@@ -49,7 +49,11 @@ func StartDashboard(port string) {
 	}))
 
 	fmt.Printf("[MONITOR] Dashboard aktif (Protected) di http://0.0.0.0:%s\n", port)
-	go http.ListenAndServe(":"+port, nil)
+	go func() {
+		if err := http.ListenAndServe(":"+port, nil); err != nil {
+			fmt.Printf("⚠️ [FATAL] Dashboard Failed to Start: %v\n", err)
+		}
+	}()
 }
 
 const dashboardHTML = `
