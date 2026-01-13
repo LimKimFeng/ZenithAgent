@@ -59,10 +59,16 @@ func main() {
 	hMode, _ := reader.ReadString('\n')
 	headless := strings.ToLower(strings.TrimSpace(hMode)) == "y"
 
+	// --- PERBAIKAN: DASHBOARD DINYALAKAN DI LUAR KONDISI STATE ---
+	// Ini memastikan port 8080 selalu aktif begitu binary dijalankan
+	monitor.StartDashboard("8080")
+
 	// Singleton Check & Tor Start
 	state := manager.GetState()
 	if state.IsRunning {
-		fmt.Printf("⚠️  Warning: Agent is already running (PID: %d). This instance will run tasks but will NOT handle IP Rotation.\n", state.LastPid)
+		fmt.Printf("⚠️  Warning: Agent is already running (PID: %d). Cleaning up state and continuing...\n", state.LastPid)
+		// Reset state agar master rotator bisa jalan jika ini adalah instansi yang baru
+		manager.UpdateState(true, true)
 	} else {
 		// Master Process
 		manager.UpdateState(true, true)
@@ -70,9 +76,6 @@ func main() {
 		
 		// Start Tor Rotator (Background) with Password
 		go network.StartRotator(10, torPass)
-
-		// Start Dashboard Server (Background)
-		monitor.StartDashboard("8080")
 	}
 
 	// Inisialisasi Notify & Engine
