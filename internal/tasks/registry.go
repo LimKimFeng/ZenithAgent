@@ -2,7 +2,10 @@ package tasks
 
 import (
 	"fmt"
-	"time"
+	"os"
+	"path/filepath"
+	"strings"
+	"zenith-agent/internal/engine"
 
 	"github.com/playwright-community/playwright-go"
 )
@@ -13,80 +16,124 @@ type Task interface {
 	Execute(ctx playwright.BrowserContext) error
 }
 
-// Registry holds all available tasks
-var Registry = map[string]Task{
-	"TernakProperty": &TernakPropertyTask{},
-	"ScalpingSR":     &ScalpingSRTask{},
-	"AkademiCrypto":  &AkademiCryptoTask{},
+// TaskInfo holds information about a discovered task
+type TaskInfo struct {
+	Key         string                                  // "TernakProperty"
+	DisplayName string                                  // "Ternak Property"
+	FileName    string                                  // "ternak_property.go"
+	Function    func(*engine.BrowserManager) error      // ExecuteTernakProperty
 }
 
-// TernakPropertyTask implementation
-type TernakPropertyTask struct{}
+// Registry holds all available tasks (will be populated by DiscoverTasks)
+var Registry map[string]TaskInfo
 
-func (t *TernakPropertyTask) Name() string { return "Ternak Property" }
-
-func (t *TernakPropertyTask) Execute(ctx playwright.BrowserContext) error {
-	// This will be called by the engine
-	return nil // Actual execution is in ExecuteTernakProperty
-}
-
-// ScalpingSRTask implementation
-type ScalpingSRTask struct{}
-
-func (s *ScalpingSRTask) Name() string { return "Scalping SR" }
-
-func (s *ScalpingSRTask) Execute(ctx playwright.BrowserContext) error {
-	return nil // Actual execution is in ExecuteScalpingSR
-}
-
-// AkademiCryptoTask implementation
-type AkademiCryptoTask struct{}
-
-func (a *AkademiCryptoTask) Name() string { return "Akademi Crypto" }
-
-func (a *AkademiCryptoTask) Execute(ctx playwright.BrowserContext) error {
-	return nil // Actual execution is in ExecuteAkademiCrypto
-}
-
-// ProjectA implementation
-type ProjectA struct{}
-
-func (p *ProjectA) Name() string { return "Project A" }
-
-func (p *ProjectA) Execute(ctx playwright.BrowserContext) error {
-	fmt.Println("Executing Project A...")
-	page, err := ctx.NewPage()
+// DiscoverTasks scans internal/tasks directory and builds task registry
+func DiscoverTasks() (map[string]TaskInfo, error) {
+	tasks := make(map[string]TaskInfo)
+	
+	// Get current working directory
+	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("could not create page: %v", err)
+		return nil, fmt.Errorf("failed to get working directory: %v", err)
 	}
-	// Example stealth navigation
-	if _, err = page.Goto("https://bot.sannysoft.com/"); err != nil {
-		return fmt.Errorf("could not goto: %v", err)
+	
+	// Path to tasks directory
+	tasksDir := filepath.Join(cwd, "internal", "tasks")
+	
+	// Read directory
+	files, err := os.ReadDir(tasksDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tasks directory: %v", err)
 	}
-	// Simulate work
-	time.Sleep(2 * time.Second)
-	fmt.Println("Project A completed successfully.")
+	
+	// Scan for task files
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		
+		fileName := file.Name()
+		
+		// Skip non-Go files and helper files
+		if !strings.HasSuffix(fileName, ".go") {
+			continue
+		}
+		
+		// Skip registry, common, and stats files
+		if fileName == "registry.go" || fileName == "common.go" || fileName == "stats.go" {
+			continue
+		}
+		
+		// Extract project name from filename
+		// Example: "ternak_property.go" -> "TernakProperty"
+		baseName := strings.TrimSuffix(fileName, ".go")
+		
+		// Convert snake_case to PascalCase
+		parts := strings.Split(baseName, "_")
+		var pascalCase string
+		for _, part := range parts {
+			if len(part) > 0 {
+				pascalCase += strings.ToUpper(part[:1]) + part[1:]
+			}
+		}
+		
+		// Create display name (Title Case with spaces)
+		displayName := strings.Join(parts, " ")
+		displayName = strings.Title(displayName)
+		
+		// Map to execution function
+		var execFunc func(*engine.BrowserManager) error
+		
+		switch pascalCase {
+		case "TernakProperty":
+			execFunc = ExecuteTernakProperty
+		case "ScalpingSr":
+			execFunc = ExecuteScalpingSR
+		case "AkademiCrypto":
+			execFunc = ExecuteAkademiCrypto
+		case "TestProject":
+			execFunc = ExecuteTestProject
+		default:
+			// Skip unknown tasks
+			fmt.Printf("[REGISTRY] Warning: No executor found for %s (file: %s)\n", pascalCase, fileName)
+			continue
+		}
+		
+		// Add to registry
+		tasks[pascalCase] = TaskInfo{
+			Key:         pascalCase,
+			DisplayName: displayName,
+			FileName:    fileName,
+			Function:    execFunc,
+		}
+		
+		fmt.Printf("[REGISTRY] Discovered task: %s (%s)\n", displayName, fileName)
+	}
+	
+	return tasks, nil
+}
+
+// InitRegistry initializes the global Registry variable
+func InitRegistry() error {
+	discovered, err := DiscoverTasks()
+	if err != nil {
+		return err
+	}
+	Registry = discovered
 	return nil
 }
 
-// ProjectB implementation
-type ProjectB struct{}
-
-func (p *ProjectB) Name() string { return "Project B" }
-
-func (p *ProjectB) Execute(ctx playwright.BrowserContext) error {
-	fmt.Println("Executing Project B...")
-	// Add project B logic here
-	return nil
+// GetTaskList returns a sorted list of task keys for display
+func GetTaskList() []string {
+	var keys []string
+	for key := range Registry {
+		keys = append(keys, key)
+	}
+	return keys
 }
 
-// ProjectC implementation
-type ProjectC struct{}
-
-func (p *ProjectC) Name() string { return "Project C" }
-
-func (p *ProjectC) Execute(ctx playwright.BrowserContext) error {
-	fmt.Println("Executing Project C...")
-	// Add project C logic here
-	return nil
+// GetTask returns a TaskInfo by key
+func GetTask(key string) (TaskInfo, bool) {
+	task, exists := Registry[key]
+	return task, exists
 }

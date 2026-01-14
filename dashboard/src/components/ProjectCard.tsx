@@ -11,22 +11,42 @@ interface ProjectStats {
 interface ProjectCardProps {
     name: string;
     stats: ProjectStats;
+    hasExecuted?: boolean;
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ name, stats }) => {
+const ProjectCard: React.FC<ProjectCardProps> = ({ name, stats, hasExecuted = true }) => {
     const isRunning = stats.is_running;
-    const cardClass = isRunning
-        ? 'border-cyan-500/30 shadow-lg shadow-cyan-900/20'
-        : 'border-rose-500/20 opacity-90 grayscale-[0.3]';
-    const statusDot = isRunning
-        ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]'
-        : 'bg-rose-500';
-    const statusText = isRunning ? 'ACTIVE RUNNING' : 'PROCESS HALTED';
-    const statusTextClass = isRunning ? 'text-cyan-400' : 'text-rose-400';
 
-    const formatTime = (isoString: string) => {
+    // Determine card styling based on state
+    let cardClass, statusDot, statusText, statusTextClass;
+
+    if (!hasExecuted) {
+        // Never executed
+        cardClass = 'border-slate-600/30 opacity-80';
+        statusDot = 'bg-slate-500';
+        statusText = 'NEVER EXECUTED';
+        statusTextClass = 'text-slate-400';
+    } else if (isRunning) {
+        // Running
+        cardClass = 'border-cyan-500/30 shadow-lg shadow-cyan-900/20';
+        statusDot = 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
+        statusText = 'ACTIVE RUNNING';
+        statusTextClass = 'text-cyan-400';
+    } else {
+        // Stopped
+        cardClass = 'border-rose-500/20 opacity-90 grayscale-[0.3]';
+        statusDot = 'bg-rose-500';
+        statusText = 'PROCESS HALTED';
+        statusTextClass = 'text-rose-400';
+    }
+
+    const formatTime = (timeString: string) => {
+        if (!timeString || timeString === '') return '--:--:--';
+
         try {
-            return new Date(isoString).toLocaleTimeString('id-ID', {
+            // Handle both ISO format and custom format "2006-01-02 15:04:05"
+            const date = new Date(timeString.replace(' ', 'T'));
+            return date.toLocaleTimeString('id-ID', {
                 hour12: false,
                 hour: '2-digit',
                 minute: '2-digit',
@@ -35,6 +55,12 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ name, stats }) => {
         } catch {
             return '--:--:--';
         }
+    };
+
+    const calculateSuccessRate = () => {
+        const total = stats.success_count + stats.failed_count;
+        if (total === 0) return 0;
+        return Math.round((stats.success_count / total) * 100);
     };
 
     return (
@@ -51,7 +77,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ name, stats }) => {
                         </h3>
                         <div className="flex items-center gap-2">
                             <span
-                                className={`w-1.5 h-1.5 rounded-full ${statusDot} animate-pulse-slow`}
+                                className={`w-1.5 h-1.5 rounded-full ${statusDot} ${hasExecuted && isRunning ? 'animate-pulse-slow' : ''}`}
                             ></span>
                             <span
                                 className={`text-[10px] font-bold tracking-widest ${statusTextClass}`}
@@ -70,7 +96,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ name, stats }) => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 relative">
+                <div className="grid grid-cols-2 gap-3 relative mb-3">
                     <div className="bg-slate-800/40 p-3 rounded-lg border border-emerald-500/10 hover:border-emerald-500/30 transition-colors group/stat">
                         <div className="flex items-center justify-between mb-1">
                             <p className="text-[10px] uppercase font-bold text-slate-500 group-hover/stat:text-emerald-400 transition-colors">
@@ -118,6 +144,26 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ name, stats }) => {
                         </p>
                     </div>
                 </div>
+
+                {/* Success Rate */}
+                {hasExecuted && (
+                    <div className="bg-slate-800/40 p-2 rounded-lg border border-slate-700/50">
+                        <div className="flex items-center justify-between">
+                            <p className="text-[10px] uppercase font-bold text-slate-500">
+                                Success Rate
+                            </p>
+                            <p className={`text-sm font-bold ${calculateSuccessRate() >= 70 ? 'text-emerald-400' : calculateSuccessRate() >= 40 ? 'text-yellow-400' : 'text-rose-400'}`}>
+                                {calculateSuccessRate()}%
+                            </p>
+                        </div>
+                        <div className="w-full bg-slate-700/50 rounded-full h-1.5 mt-2">
+                            <div
+                                className={`h-1.5 rounded-full transition-all duration-500 ${calculateSuccessRate() >= 70 ? 'bg-emerald-500' : calculateSuccessRate() >= 40 ? 'bg-yellow-500' : 'bg-rose-500'}`}
+                                style={{ width: `${calculateSuccessRate()}%` }}
+                            ></div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

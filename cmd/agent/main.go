@@ -42,22 +42,47 @@ func main() {
 	intStr, _ := reader.ReadString('\n')
 	intervalMinutes, _ := strconv.Atoi(strings.TrimSpace(intStr))
 
-	// Project Selection
-	fmt.Println("Pilih Project:")
-	fmt.Println("1. Ternak Property")
-	fmt.Println("2. Scalping Support & Resistance")
-	fmt.Print("Pilihan (1/2): ")
-	choice, _ := reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
-	
-	projectName := "Ternak Property"
-	if choice == "2" {
-		projectName = "Scalping SR"
-	}
-
 	fmt.Print("Gunakan Headless mode? (y/n): ")
 	hMode, _ := reader.ReadString('\n')
 	headless := strings.ToLower(strings.TrimSpace(hMode)) == "y"
+
+	// Initialize task registry
+	fmt.Println("\n🔍 Discovering available tasks...")
+	if err := tasks.InitRegistry(); err != nil {
+		fmt.Printf("❌ Failed to discover tasks: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Display available projects
+	fmt.Println("\n🎯 Available Projects:")
+	taskList := tasks.GetTaskList()
+	
+	if len(taskList) == 0 {
+		fmt.Println("❌ No tasks found!")
+		os.Exit(1)
+	}
+	
+	// Display menu
+	for i, key := range taskList {
+		task, _ := tasks.GetTask(key)
+		fmt.Printf("%d. %s\n", i+1, task.DisplayName)
+	}
+	
+	fmt.Printf("Masukkan pilihan (1-%d): ", len(taskList))
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+	
+	// Parse choice
+	choiceNum, err := strconv.Atoi(choice)
+	if err != nil || choiceNum < 1 || choiceNum > len(taskList) {
+		fmt.Println("❌ Pilihan tidak valid!")
+		os.Exit(1)
+	}
+	
+	selectedProject := taskList[choiceNum-1]
+	selectedTask, _ := tasks.GetTask(selectedProject)
+	
+	fmt.Printf("\n✓ Selected: %s\n", selectedTask.DisplayName)
 
 	// Acquire lock to prevent multiple instances
 	if err := manager.AcquireLock(); err != nil {
@@ -89,43 +114,43 @@ func main() {
 	notifier := notify.NewEmailNotifier(smtpUser, smtpPass, recipient)
 	browserManager := engine.NewBrowserManager(headless)
 
-	fmt.Printf("\n--- ZenithAgent Started ---\nTarget: %s\nInterval: %d menit\n\n", projectName, intervalMinutes)
+	fmt.Printf("\n--- ZenithAgent Started ---\nTarget: %s\nInterval: %d menit\n\n", selectedProject, intervalMinutes)
 
 	ticker := time.NewTicker(time.Duration(intervalMinutes) * time.Minute)
 	reportTicker := time.NewTicker(24 * time.Hour)
 
 	// Jalankan pertama kali saat start
-	runTask(browserManager, notifier, choice)
+	runTask(browserManager, notifier, selectedProject)
 
 	for {
 		select {
 		case <-ticker.C:
-			runTask(browserManager, notifier, choice)
+			runTask(browserManager, notifier, selectedProject)
 		case <-reportTicker.C:
 			notifier.SendDailyReport()
 		}
 	}
 }
 
-func runTask(bm *engine.BrowserManager, n *notify.EmailNotifier, choice string) {
+func runTask(bm *engine.BrowserManager, n *notify.EmailNotifier, projectKey string) {
 	fmt.Printf("[%s] Executing Task...\n", time.Now().Format("15:04:05"))
 	
-	var err error
-	var pName string
-	
-	if choice == "2" {
-		pName = "Scalping SR"
-		err = tasks.ExecuteScalpingSR(bm)
-	} else {
-		pName = "TernakProperty"
-		err = tasks.ExecuteTernakProperty(bm)
+	// Get task from registry
+	task, exists := tasks.GetTask(projectKey)
+	if !exists {
+		log.Printf("Task not found: %s", projectKey)
+		return
 	}
-
-	tasks.GlobalUpdateStats(pName, err == nil, "") 
+	
+	// Execute task
+	err := task.Function(bm)
+	
+	// Update stats
+	tasks.GlobalUpdateStats(task.DisplayName, err == nil, "") 
 
 	if err != nil {
 		log.Printf("Task Error: %v", err)
-		tasks.GlobalUpdateStats(pName, false, err.Error())
+		tasks.GlobalUpdateStats(task.DisplayName, false, err.Error())
 	} else {
 		fmt.Println("Task Success!")
 	}

@@ -3,12 +3,14 @@ import ProjectCard from './components/ProjectCard';
 import ActivityLog from './components/ActivityLog';
 import './index.css';
 
-interface ProjectStats {
+interface Project {
+  key: string;
+  name: string;
   is_running: boolean;
   success_count: number;
   failed_count: number;
-  fail_reasons: string[];
   last_run: string;
+  has_executed: boolean;
 }
 
 interface LogEntry {
@@ -18,21 +20,21 @@ interface LogEntry {
   type: string;
 }
 
-interface StatsData {
-  projects: Record<string, ProjectStats>;
+interface ProjectsData {
+  projects: Project[];
   history: LogEntry[];
 }
 
 const AUTH_CREDENTIALS = btoa('zenithagent.admin@cornelweb.com:@zenithagent04042008cornel@');
 
 function App() {
-  const [stats, setStats] = useState<StatsData | null>(null);
+  const [data, setData] = useState<ProjectsData | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline'>('offline');
   const [error, setError] = useState<string | null>(null);
 
   const updateDashboard = async () => {
     try {
-      const response = await fetch('/api/stats', {
+      const response = await fetch('/api/projects', {
         headers: {
           'Authorization': `Basic ${AUTH_CREDENTIALS}`,
         },
@@ -42,12 +44,12 @@ function App() {
         throw new Error('Authentication failed');
       }
 
-      const data = await response.json();
-      setStats(data);
+      const projectsData = await response.json();
+      setData(projectsData);
       setConnectionStatus('online');
       setError(null);
     } catch (err) {
-      console.error('Failed to fetch stats:', err);
+      console.error('Failed to fetch projects:', err);
       setConnectionStatus('offline');
       setError('Failed to connect to backend');
     }
@@ -99,30 +101,30 @@ function App() {
           <div className="flex items-center gap-4">
             <div
               className={`glass px-4 py-2 rounded-full flex items-center gap-3 shadow-lg shadow-black/20 ${connectionStatus === 'offline'
-                  ? 'bg-rose-950/30 border-rose-500/20'
-                  : ''
+                ? 'bg-rose-950/30 border-rose-500/20'
+                : ''
                 }`}
             >
               <div className="relative">
                 <span className="flex h-3 w-3">
                   <span
                     className={`animate-ping absolute inline-flex h-full w-full rounded-full ${connectionStatus === 'online'
-                        ? 'bg-emerald-400 opacity-75'
-                        : 'bg-rose-500 opacity-20'
+                      ? 'bg-emerald-400 opacity-75'
+                      : 'bg-rose-500 opacity-20'
                       }`}
                   ></span>
                   <span
                     className={`relative inline-flex rounded-full h-3 w-3 ${connectionStatus === 'online'
-                        ? 'bg-emerald-500'
-                        : 'bg-rose-600'
+                      ? 'bg-emerald-500'
+                      : 'bg-rose-600'
                       }`}
                   ></span>
                 </span>
               </div>
               <span
                 className={`text-xs font-semibold tracking-wide ${connectionStatus === 'online'
-                    ? 'text-emerald-400'
-                    : 'text-rose-500'
+                  ? 'text-emerald-400'
+                  : 'text-rose-500'
                   }`}
               >
                 {connectionStatus === 'online' ? 'SYSTEM ONLINE' : 'OFFLINE'}
@@ -156,15 +158,26 @@ function App() {
           </div>
         )}
 
-        {/* Stats Overview */}
+        {/* Projects Grid - Now showing ALL projects */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {stats?.projects &&
-            Object.entries(stats.projects).map(([name, projectStats]) => (
-              <ProjectCard key={name} name={name} stats={projectStats} />
-            ))}
-          {(!stats?.projects || Object.keys(stats.projects).length === 0) && (
+          {data?.projects && data.projects.length > 0 ? (
+            data.projects.map((project) => (
+              <ProjectCard
+                key={project.key}
+                name={project.name}
+                stats={{
+                  is_running: project.is_running,
+                  success_count: project.success_count,
+                  failed_count: project.failed_count,
+                  fail_reasons: [],
+                  last_run: project.last_run,
+                }}
+                hasExecuted={project.has_executed}
+              />
+            ))
+          ) : (
             <div className="col-span-2 glass rounded-2xl p-8 text-center">
-              <p className="text-slate-400">No projects running yet...</p>
+              <p className="text-slate-400">No projects available...</p>
             </div>
           )}
         </div>
@@ -199,7 +212,7 @@ function App() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-2">
-            <ActivityLog history={stats?.history || []} />
+            <ActivityLog history={data?.history || []} />
           </div>
         </div>
       </div>

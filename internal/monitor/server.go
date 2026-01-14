@@ -1,9 +1,11 @@
 package monitor
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"zenith-agent/internal/tasks"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -44,6 +46,71 @@ func StartDashboard(port string) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Write(data)
+	}))
+
+	// New API endpoint for all projects (discovered + stats)
+	http.HandleFunc("/api/projects", basicAuth(func(w http.ResponseWriter, r *http.Request) {
+		// Initialize task registry
+		if err := tasks.InitRegistry(); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to discover tasks: %v", err), 500)
+			return
+		}
+
+		// Read stats.json
+		var globalStats tasks.GlobalStats
+		data, err := os.ReadFile("stats.json")
+		if err == nil {
+			json.Unmarshal(data, &globalStats)
+		}
+
+		// Build response with all projects
+		type ProjectResponse struct {
+			Key          string `json:"key"`
+			Name         string `json:"name"`
+			IsRunning    bool   `json:"is_running"`
+			SuccessCount int    `json:"success_count"`
+			FailedCount  int    `json:"failed_count"`
+			LastRun      string `json:"last_run"`
+			HasExecuted  bool   `json:"has_executed"`
+		}
+
+		response := struct {
+			Projects []ProjectResponse     `json:"projects"`
+			History  []tasks.LogEntry      `json:"history"`
+		}{
+			Projects: []ProjectResponse{},
+			History:  globalStats.History,
+		}
+
+		// Iterate through discovered tasks
+		for key, task := range tasks.Registry {
+			projectResp := ProjectResponse{
+				Key:          key,
+				Name:         task.DisplayName,
+				IsRunning:    false,
+				SuccessCount: 0,
+				FailedCount:  0,
+				LastRun:      "",
+				HasExecuted:  false,
+			}
+
+			// Merge with stats if exists
+			if stats, exists := globalStats.Projects[task.DisplayName]; exists {
+				projectResp.IsRunning = stats.IsRunning
+				projectResp.SuccessCount = stats.SuccessCount
+				projectResp.FailedCount = stats.FailedCount
+				if !stats.LastRun.IsZero() {
+					projectResp.LastRun = stats.LastRun.Format("2006-01-02 15:04:05")
+				}
+				projectResp.HasExecuted = stats.SuccessCount > 0 || stats.FailedCount > 0
+			}
+
+			response.Projects = append(response.Projects, projectResp)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*") // Corrected placement
+		json.NewEncoder(w).Encode(response)
 	}))
 
 	// Check if React build exists
