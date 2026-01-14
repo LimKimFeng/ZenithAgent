@@ -34,6 +34,7 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func StartDashboard(port string) {
+	// API endpoint for stats
 	http.HandleFunc("/api/stats", basicAuth(func(w http.ResponseWriter, r *http.Request) {
 		data, err := os.ReadFile("stats.json")
 		if err != nil {
@@ -41,14 +42,34 @@ func StartDashboard(port string) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Write(data)
 	}))
 
-	http.HandleFunc("/", basicAuth(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, dashboardHTML)
-	}))
+	// Check if React build exists
+	buildDir := "./dashboard/dist"
+	if _, err := os.Stat(buildDir); err == nil {
+		// Serve React production build
+		fs := http.FileServer(http.Dir(buildDir))
+		http.Handle("/", basicAuth(func(w http.ResponseWriter, r *http.Request) {
+			// Try to serve the file
+			path := buildDir + r.URL.Path
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				// File doesn't exist, serve index.html (SPA fallback)
+				http.ServeFile(w, r, buildDir+"/index.html")
+				return
+			}
+			fs.ServeHTTP(w, r)
+		}))
+		fmt.Printf("[MONITOR] Dashboard serving React build (Protected) at http://0.0.0.0:%s\n", port)
+	} else {
+		// Fallback to embedded HTML for development
+		http.HandleFunc("/", basicAuth(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, dashboardHTML)
+		}))
+		fmt.Printf("[MONITOR] Dashboard HTML active (Protected) at http://0.0.0.0:%s\n", port)
+	}
 
-	fmt.Printf("[MONITOR] Dashboard aktif (Protected) di http://0.0.0.0:%s\n", port)
 	go func() {
 		if err := http.ListenAndServe(":"+port, nil); err != nil {
 			fmt.Printf("⚠️ [FATAL] Dashboard Failed to Start: %v\n", err)
