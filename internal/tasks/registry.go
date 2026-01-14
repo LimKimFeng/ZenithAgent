@@ -15,9 +15,37 @@ type Task interface {
 
 // Registry holds all available tasks
 var Registry = map[string]Task{
-	"ProjectA":       &ProjectA{},
-	"ProjectB":       &ProjectB{},
-	"ProjectC":       &ProjectC{},
+	"TernakProperty": &TernakPropertyTask{},
+	"ScalpingSR":     &ScalpingSRTask{},
+	"AkademiCrypto":  &AkademiCryptoTask{},
+}
+
+// TernakPropertyTask implementation
+type TernakPropertyTask struct{}
+
+func (t *TernakPropertyTask) Name() string { return "Ternak Property" }
+
+func (t *TernakPropertyTask) Execute(ctx playwright.BrowserContext) error {
+	// This will be called by the engine
+	return nil // Actual execution is in ExecuteTernakProperty
+}
+
+// ScalpingSRTask implementation
+type ScalpingSRTask struct{}
+
+func (s *ScalpingSRTask) Name() string { return "Scalping SR" }
+
+func (s *ScalpingSRTask) Execute(ctx playwright.BrowserContext) error {
+	return nil // Actual execution is in ExecuteScalpingSR
+}
+
+// AkademiCryptoTask implementation
+type AkademiCryptoTask struct{}
+
+func (a *AkademiCryptoTask) Name() string { return "Akademi Crypto" }
+
+func (a *AkademiCryptoTask) Execute(ctx playwright.BrowserContext) error {
+	return nil // Actual execution is in ExecuteAkademiCrypto
 }
 
 // ProjectA implementation
