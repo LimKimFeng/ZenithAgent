@@ -751,19 +751,38 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 			continue
 		}
 
-		// Setup response listener for OTP
+		// Setup listeners
 		otpChan := make(chan string, 1)
+
+		// 1. Console Listener (for 'OTP (dev):' log)
+		page.On("console", func(msg playwright.ConsoleMessage) {
+			text := msg.Text()
+			if strings.Contains(text, "OTP (dev):") {
+				fmt.Printf("[ALMAI] 📣 Console Log: %s\n", text)
+				parts := strings.Split(text, ":")
+				if len(parts) > 1 {
+					otp := strings.TrimSpace(parts[1])
+					if len(otp) == 6 {
+						select {
+						case otpChan <- otp:
+						default:
+						}
+					}
+				}
+			}
+		})
+
+		// 2. Response Listener (as backup/debug)
 		handler := func(response playwright.Response) {
 			url := response.URL()
-			fmt.Printf("[ALMAI] [REQ] %s\n", url)
-
 			if strings.Contains(url, "send-otp") {
+				fmt.Printf("[ALMAI] 🌐 Response: %s\n", url)
 				body, err := response.Body()
 				if err == nil {
-					fmt.Printf("[ALMAI] [OTP-BODY] %s\n", string(body))
 					var result map[string]interface{}
 					if err := json.Unmarshal(body, &result); err == nil {
 						if otp, ok := result["otp_dev"].(string); ok && otp != "" {
+							fmt.Printf("[ALMAI] 🔑 Found OTP in Response: %s\n", otp)
 							select {
 							case otpChan <- otp:
 							default:
@@ -795,22 +814,24 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 			continue
 		}
 
-		// Try to capture OTP from response with timeout
+		// Try to capture OTP with timeout
 		var capturedOTP string
+		fmt.Println("[ALMAI] Waiting for OTP capture...")
 		select {
 		case capturedOTP = <-otpChan:
-			fmt.Printf("[ALMAI] 🔑 Captured OTP (dev): %s\n", capturedOTP)
-		case <-time.After(10 * time.Second):
-			fmt.Println("[ALMAI] ⚠️ Timeout waiting for OTP in response")
+			fmt.Printf("[ALMAI] 🎯 Captured OTP: %s\n", capturedOTP)
+		case <-time.After(15 * time.Second):
+			fmt.Println("[ALMAI] ⚠️ Timeout waiting for OTP")
 		}
+
 		page.RemoveListener("response", handler)
 
 		// Wait for OTP status
-		fmt.Println("[ALMAI] Waiting for OTP status...")
+		fmt.Println("[ALMAI] Waiting for OTP modal status...")
 		isOTP, resMsg := detectOTP(page, 15000)
 
 		if isOTP || capturedOTP != "" {
-			fmt.Printf("[ALMAI] OTP Process initiated. Captured: %s\n", capturedOTP)
+			fmt.Printf("[ALMAI] OTP Process initiated. Final OTP: %s\n", capturedOTP)
 
 			if capturedOTP != "" {
 				fmt.Println("[ALMAI] Automatically filling OTP...")
