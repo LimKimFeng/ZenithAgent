@@ -751,8 +751,8 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 			continue
 		}
 
-		// 1. Setup response listener for OTP
-		var capturedOTP string
+		// Setup response listener for OTP
+		otpChan := make(chan string, 1)
 		handler := func(response playwright.Response) {
 			if strings.Contains(response.URL(), "/register/send-otp") {
 				body, err := response.Body()
@@ -760,8 +760,10 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 					var result map[string]interface{}
 					if err := json.Unmarshal(body, &result); err == nil {
 						if otp, ok := result["otp_dev"].(string); ok && otp != "" {
-							capturedOTP = otp
-							fmt.Printf("[ALMAI] 🔑 Found OTP (dev): %s\n", capturedOTP)
+							select {
+							case otpChan <- otp:
+							default:
+							}
 						}
 					}
 				}
@@ -789,7 +791,17 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 			continue
 		}
 
-		// Wait for OTP status or captured OTP
+		// Try to capture OTP from response with timeout
+		var capturedOTP string
+		select {
+		case capturedOTP = <-otpChan:
+			fmt.Printf("[ALMAI] 🔑 Captured OTP (dev): %s\n", capturedOTP)
+		case <-time.After(10 * time.Second):
+			fmt.Println("[ALMAI] ⚠️ Timeout waiting for OTP in response")
+		}
+		page.RemoveListener("response", handler)
+
+		// Wait for OTP status
 		fmt.Println("[ALMAI] Waiting for OTP status...")
 		isOTP, resMsg := detectOTP(page, 15000)
 
@@ -802,6 +814,10 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 				for i, char := range capturedOTP {
 					selector := fmt.Sprintf(".otp-input[data-index='%d']", i)
 					if i < 6 {
+						// Ensure input is visible and reachable
+						page.Locator(selector).WaitFor(playwright.LocatorWaitForOptions{
+							State: playwright.WaitForSelectorStateVisible,
+						})
 						page.Locator(selector).Fill(string(char))
 					}
 				}
@@ -816,13 +832,14 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 				}
 
 				// Wait for final success alert or redirect
-				time.Sleep(3 * time.Second)
+				fmt.Println("[ALMAI] Waiting for final confirmation...")
+				time.Sleep(5 * time.Second)
 
 				// Handle "OK" on success alert modal if it exists
 				okBtn := page.Locator("#alertModal button:has-text('OK')")
-				if visible, _ := okBtn.IsVisible(playwright.LocatorIsVisibleOptions{Timeout: playwright.Float(3000)}); visible {
+				if visible, _ := okBtn.IsVisible(playwright.LocatorIsVisibleOptions{Timeout: playwright.Float(5000)}); visible {
 					okBtn.Click()
-					time.Sleep(1 * time.Second)
+					time.Sleep(2 * time.Second)
 				}
 			}
 
@@ -857,8 +874,6 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 				stats.errors++
 			}
 		}
-
-		page.RemoveListener("response", handler)
 
 		// Random delay between entries
 		delay := time.Duration(2+rand.Intn(4)) * time.Second
