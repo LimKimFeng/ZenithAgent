@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	almaiURL       = "https://almai.id/referral/scalpinghack"
+	almaiURL       = "https://almai.id/register?ref=SCALPINGHACK"
 	almaiBaseDir   = "almai-folder"
 	almaiCSVDir    = "almai-folder/file-csv"
 	almaiOutputDir = "almai-folder/output"
@@ -436,10 +436,9 @@ func navigateToRegisterModal(page playwright.Page, screenshotDir string) (bool, 
 		page.Locator("#auth-login").GetByText("Daftar").Click(playwright.LocatorClickOptions{Force: playwright.Bool(true)})
 	}
 
-	page.Locator("#auth-register").WaitFor(playwright.LocatorWaitForOptions{
-		State:   playwright.WaitForSelectorStateVisible,
-		Timeout: playwright.Float(10000),
-	})
+	if visible, _ := page.Locator("#registerFormEl").IsVisible(); visible {
+		return true, "#registerFormEl"
+	}
 
 	if visible, _ := page.Locator("#formRegister").IsVisible(); visible {
 		return true, "#formRegister"
@@ -463,18 +462,36 @@ func fillAndSubmit(page playwright.Page, entry AlmaiEntry, formSelector string) 
 	form.Locator("input[name='phone']").Fill(entry.WhatsApp, playwright.LocatorFillOptions{Force: playwright.Bool(true)})
 	form.Locator("input[name='email']").Fill(entry.Email, playwright.LocatorFillOptions{Force: playwright.Bool(true)})
 	form.Locator("input[name='password']").Fill(entry.Password, playwright.LocatorFillOptions{Force: playwright.Bool(true)})
-	form.Locator("input[name='password_confirmation']").Fill(entry.KonfirmasiPassword, playwright.LocatorFillOptions{Force: playwright.Bool(true)})
+
+	// Support both old and new password confirm field names
+	confirmField := form.Locator("input[name='password_confirm']")
+	if visible, _ := confirmField.IsVisible(); visible {
+		confirmField.Fill(entry.KonfirmasiPassword, playwright.LocatorFillOptions{Force: playwright.Bool(true)})
+	} else {
+		form.Locator("input[name='password_confirmation']").Fill(entry.KonfirmasiPassword, playwright.LocatorFillOptions{Force: playwright.Bool(true)})
+	}
 
 	// Accept terms
 	terms := form.Locator("input[name='terms']")
 	if visible, _ := terms.IsVisible(); visible {
 		terms.Check(playwright.LocatorCheckOptions{Force: playwright.Bool(true)})
 	} else {
-		form.Locator("label[for='terms']").Click(playwright.LocatorClickOptions{Force: playwright.Bool(true)})
+		// Try ID based or label click
+		regTerms := page.Locator("#regTerms")
+		if visible, _ := regTerms.IsVisible(); visible {
+			regTerms.Check(playwright.LocatorCheckOptions{Force: playwright.Bool(true)})
+		} else {
+			form.Locator("label[for='terms']").Click(playwright.LocatorClickOptions{Force: playwright.Bool(true)})
+		}
 	}
 
 	// Submit
-	form.Locator("button:has-text('Kirim')").Click(playwright.LocatorClickOptions{Force: playwright.Bool(true)})
+	submitBtn := form.Locator("#registerBtn")
+	if visible, _ := submitBtn.IsVisible(); visible {
+		submitBtn.Click(playwright.LocatorClickOptions{Force: playwright.Bool(true)})
+	} else {
+		form.Locator("button:has-text('Kirim'), button:has-text('Daftar')").Click(playwright.LocatorClickOptions{Force: playwright.Bool(true)})
+	}
 
 	return true, ""
 }
@@ -485,8 +502,8 @@ func detectOTP(page playwright.Page, timeout int) (bool, string) {
 	timeoutDuration := time.Duration(timeout) * time.Millisecond
 
 	for time.Since(startTime) < timeoutDuration {
-		// Check for OTP modal
-		otpModal := page.Locator("#auth-register-otp")
+		// Check for OTP modal (support both old and new IDs)
+		otpModal := page.Locator("#auth-register-otp, #otpModal")
 		if visible, _ := otpModal.IsVisible(); visible {
 			return true, "modal_otp_visible"
 		}
@@ -504,11 +521,13 @@ func detectOTP(page playwright.Page, timeout int) (bool, string) {
 			return false, fmt.Sprintf("validation_error: %s", text)
 		}
 
-		// Check for alert errors
-		alertDanger := page.Locator(".alert-danger")
+		// Check for alert errors (support both alert-danger and showAlert modals)
+		alertDanger := page.Locator(".alert-danger, #alertMessage")
 		if visible, _ := alertDanger.IsVisible(); visible {
 			text, _ := alertDanger.First().TextContent()
-			return false, fmt.Sprintf("alert_error: %s", text)
+			if text != "" {
+				return false, fmt.Sprintf("alert_error: %s", text)
+			}
 		}
 
 		time.Sleep(500 * time.Millisecond)
@@ -605,8 +624,8 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 				Email:              email,
 				WhatsApp:           phone,
 				IP:                 ip,
-				Password:           "12345678",
-				KonfirmasiPassword: "12345678",
+				Password:           "password@12345678",
+				KonfirmasiPassword: "password@12345678",
 			}
 
 			// Filter by IP duplicates
@@ -722,9 +741,28 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 			continue
 		}
 
+		// 1. Setup response listener for OTP
+		var capturedOTP string
+		handler := func(response playwright.Response) {
+			if strings.Contains(response.URL(), "/register/send-otp") {
+				body, err := response.Body()
+				if err == nil {
+					var result map[string]interface{}
+					if err := json.Unmarshal(body, &result); err == nil {
+						if otp, ok := result["otp_dev"].(string); ok && otp != "" {
+							capturedOTP = otp
+							fmt.Printf("[ALMAI] 🔑 Found OTP (dev): %s\n", capturedOTP)
+						}
+					}
+				}
+			}
+		}
+		page.On("response", handler)
+
 		// Fill and submit form
 		ok, errMsg := fillAndSubmit(page, entry, formSelector)
 		if !ok {
+			page.RemoveListener("response", handler)
 			fmt.Printf("[ALMAI] Failed to fill form: %s\n", errMsg)
 			page.Screenshot(playwright.PageScreenshotOptions{
 				Path: playwright.String(filepath.Join(screenshotDir, fmt.Sprintf("err_fill_%d.png", idx))),
@@ -741,14 +779,46 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 			continue
 		}
 
-		// Wait for OTP
-		fmt.Println("[ALMAI] Waiting for OTP...")
-		isOTP, resMsg := detectOTP(page, 30000)
+		// Wait for OTP status or captured OTP
+		fmt.Println("[ALMAI] Waiting for OTP status...")
+		isOTP, resMsg := detectOTP(page, 15000)
 
-		if isOTP {
+		if isOTP || capturedOTP != "" {
+			fmt.Printf("[ALMAI] OTP Process initiated. Captured: %s\n", capturedOTP)
+
+			if capturedOTP != "" {
+				fmt.Println("[ALMAI] Automatically filling OTP...")
+				// The inputs are .otp-input with data-index 0-5
+				for i, char := range capturedOTP {
+					selector := fmt.Sprintf(".otp-input[data-index='%d']", i)
+					if i < 6 {
+						page.Locator(selector).Fill(string(char))
+					}
+				}
+				time.Sleep(1 * time.Second)
+
+				// Click verify but support potentially different buttons
+				verifyBtn := page.Locator("#verifyOtpBtn")
+				if visible, _ := verifyBtn.IsVisible(); visible {
+					verifyBtn.Click()
+				} else {
+					page.Locator("button:has-text('Verifikasi')").Click()
+				}
+
+				// Wait for final success alert or redirect
+				time.Sleep(3 * time.Second)
+
+				// Handle "OK" on success alert modal if it exists
+				okBtn := page.Locator("#alertModal button:has-text('OK')")
+				if visible, _ := okBtn.IsVisible(playwright.LocatorIsVisibleOptions{Timeout: playwright.Float(3000)}); visible {
+					okBtn.Click()
+					time.Sleep(1 * time.Second)
+				}
+			}
+
 			fmt.Printf("[ALMAI] ✅ SUCCESS: %s\n", resMsg)
 			progress[key] = AlmaiProgress{
-				Status:    "otp_required",
+				Status:    "success",
 				Meta:      &entry,
 				Timestamp: time.Now().Format("2006-01-02 15:04:05"),
 			}
@@ -757,7 +827,7 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 			stats.success++
 			consecutiveErrors = 0
 
-			// Clear cookies
+			// Clear cookies for next session
 			context.ClearCookies()
 		} else {
 			fmt.Printf("[ALMAI] ⚠️ FAILED: %s\n", resMsg)
@@ -777,6 +847,8 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 				stats.errors++
 			}
 		}
+
+		page.RemoveListener("response", handler)
 
 		// Random delay between entries
 		delay := time.Duration(2+rand.Intn(4)) * time.Second
