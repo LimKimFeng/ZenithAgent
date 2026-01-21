@@ -754,9 +754,16 @@ func ExecuteAlmai(bm *engine.BrowserManager) error {
 		// Setup response listener for OTP
 		otpChan := make(chan string, 1)
 		handler := func(response playwright.Response) {
-			if strings.Contains(response.URL(), "/register/send-otp") {
+			url := response.URL()
+			// Log all API responses for debugging
+			if strings.Contains(url, "/api/") || strings.Contains(url, "/register/") {
+				fmt.Printf("[ALMAI] [DEBUG] Response URL: %s\n", url)
+			}
+
+			if strings.Contains(url, "/register/send-otp") || strings.Contains(url, "send-otp") {
 				body, err := response.Body()
 				if err == nil {
+					fmt.Printf("[ALMAI] [DEBUG] OTP Body: %s\n", string(body))
 					var result map[string]interface{}
 					if err := json.Unmarshal(body, &result); err == nil {
 						if otp, ok := result["otp_dev"].(string); ok && otp != "" {
