@@ -56,41 +56,41 @@ func main() {
 	// Display available projects
 	fmt.Println("\n🎯 Available Projects:")
 	taskList := tasks.GetTaskList()
-	
+
 	if len(taskList) == 0 {
 		fmt.Println("❌ No tasks found!")
 		os.Exit(1)
 	}
-	
+
 	// Display menu
 	for i, key := range taskList {
 		task, _ := tasks.GetTask(key)
 		fmt.Printf("%d. %s\n", i+1, task.DisplayName)
 	}
-	
+
 	fmt.Printf("Masukkan pilihan (1-%d): ", len(taskList))
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
-	
+
 	// Parse choice
 	choiceNum, err := strconv.Atoi(choice)
 	if err != nil || choiceNum < 1 || choiceNum > len(taskList) {
 		fmt.Println("❌ Pilihan tidak valid!")
 		os.Exit(1)
 	}
-	
+
 	selectedProject := taskList[choiceNum-1]
 	selectedTask, _ := tasks.GetTask(selectedProject)
-	
+
 	fmt.Printf("\n✓ Selected: %s\n", selectedTask.DisplayName)
 
 	// Acquire lock to prevent multiple instances
-	if err := manager.AcquireLock(); err != nil {
-		fmt.Printf("\n%v\n\n", err)
-		fmt.Println("If you believe this is an error, remove the .zenith.lock file manually.")
-		os.Exit(1)
-	}
-	defer manager.ReleaseLock()
+	// if err := manager.AcquireLock(); err != nil {
+	// 	fmt.Printf("\n%v\n\n", err)
+	// 	fmt.Println("If you believe this is an error, remove the .zenith.lock file manually.")
+	// 	os.Exit(1)
+	// }
+	// defer manager.ReleaseLock()
 
 	// --- PERBAIKAN: DASHBOARD DINYALAKAN DI LUAR KONDISI STATE ---
 	// Ini memastikan port 8080 selalu aktif begitu binary dijalankan
@@ -106,7 +106,7 @@ func main() {
 		manager.UpdateState(true, true)
 		defer manager.UpdateState(false, false)
 	}
-	
+
 	// Start Tor Rotator (Background) with Password
 	go network.StartRotator(10, torPass)
 
@@ -134,19 +134,19 @@ func main() {
 
 func runTask(bm *engine.BrowserManager, n *notify.EmailNotifier, projectKey string) {
 	fmt.Printf("[%s] Executing Task...\n", time.Now().Format("15:04:05"))
-	
+
 	// Get task from registry
 	task, exists := tasks.GetTask(projectKey)
 	if !exists {
 		log.Printf("Task not found: %s", projectKey)
 		return
 	}
-	
+
 	// Execute task
 	err := task.Function(bm)
-	
+
 	// Update stats
-	tasks.GlobalUpdateStats(task.DisplayName, err == nil, "") 
+	tasks.GlobalUpdateStats(task.DisplayName, err == nil, "")
 
 	if err != nil {
 		log.Printf("Task Error: %v", err)
