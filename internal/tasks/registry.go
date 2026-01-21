@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"zenith-agent/internal/engine"
 
@@ -139,6 +140,7 @@ func GetTaskList() []string {
 	for key := range Registry {
 		keys = append(keys, key)
 	}
+	sort.Strings(keys)
 	return keys
 }
 
