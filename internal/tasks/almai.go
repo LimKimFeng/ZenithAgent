@@ -389,16 +389,21 @@ func smartNav(page playwright.Page, url string) bool {
 
 // navigateToRegisterModal attempts to access registration form
 func navigateToRegisterModal(page playwright.Page, screenshotDir string) (bool, string) {
-	fmt.Println("[ALMAI] Checking for registration form...")
+	// 0. Check for direct registration form first (for new URL)
+	directForm := page.Locator("#registerFormEl")
+	if visible, _ := directForm.IsVisible(); visible {
+		fmt.Println("[ALMAI] Direct registration form (#registerFormEl) detected!")
+		return true, "#registerFormEl"
+	}
 
 	// 1. Check for WPA popup
 	formWPA := page.Locator("#formRegisterWPA")
-	if visible, _ := formWPA.IsVisible(playwright.LocatorIsVisibleOptions{Timeout: playwright.Float(5000)}); visible {
+	if visible, _ := formWPA.IsVisible(playwright.LocatorIsVisibleOptions{Timeout: playwright.Float(2000)}); visible {
 		fmt.Println("[ALMAI] WPA Registration popup detected!")
 		return true, "#formRegisterWPA"
 	}
 
-	fmt.Println("[ALMAI] WPA popup not detected, trying manual path...")
+	fmt.Println("[ALMAI] Form not immediately visible, trying manual path...")
 
 	// 2. Try opening auth modal via Login button
 	authModal := page.Locator("#auth-modal")
@@ -436,12 +441,12 @@ func navigateToRegisterModal(page playwright.Page, screenshotDir string) (bool, 
 		page.Locator("#auth-login").GetByText("Daftar").Click(playwright.LocatorClickOptions{Force: playwright.Bool(true)})
 	}
 
-	if visible, _ := page.Locator("#registerFormEl").IsVisible(); visible {
-		return true, "#registerFormEl"
-	}
-
-	if visible, _ := page.Locator("#formRegister").IsVisible(); visible {
-		return true, "#formRegister"
+	// Final check for any of the forms
+	possibleForms := []string{"#registerFormEl", "#formRegister", "#formRegisterWPA"}
+	for _, selector := range possibleForms {
+		if visible, _ := page.Locator(selector).IsVisible(); visible {
+			return true, selector
+		}
 	}
 
 	return false, ""
