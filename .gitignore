@@ -7,6 +7,7 @@
 *.dll
 *.so
 *.dylib
+zenith-agent
 
 # Test binary, built with `go test -c`
 *.test
@@ -19,3 +20,20 @@
 
 # Go workspace file
 go.work
+
+# Sensitive files - DO NOT COMMIT
+akses ssh
+DEPLOYMENT.md
+CONVERSATION_LOG.txt
+
+# Runtime & State files
+stats.json
+state.json
+*.lock
+sys-log-runtime
+*.log
+
+# Node modules
+node_modules/
+dashboard/dist/
+dashboard/.vite/

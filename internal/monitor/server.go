@@ -19,9 +19,9 @@ const (
 func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, pass, ok := r.BasicAuth()
-		
+
 		// Hardcoded Hash untuk @zenithagent04042008cornel@
-		hashPass := "$2a$10$9e/z6htdS4Qrdlngl/sbgOCHXg1pnN8ZX7/kbf74na.MOTsDMScvm" 
+		hashPass := "$2a$10$9e/z6htdS4Qrdlngl/sbgOCHXg1pnN8ZX7/kbf74na.MOTsDMScvm"
 
 		err := bcrypt.CompareHashAndPassword([]byte(hashPass), []byte(pass))
 
@@ -75,8 +75,8 @@ func StartDashboard(port string) {
 		}
 
 		response := struct {
-			Projects []ProjectResponse     `json:"projects"`
-			History  []tasks.LogEntry      `json:"history"`
+			Projects []ProjectResponse `json:"projects"`
+			History  []tasks.LogEntry  `json:"history"`
 		}{
 			Projects: []ProjectResponse{},
 			History:  globalStats.History,
@@ -139,214 +139,189 @@ func StartDashboard(port string) {
 
 	go func() {
 		if err := http.ListenAndServe(":"+port, nil); err != nil {
-			fmt.Printf("⚠️ [FATAL] Dashboard Failed to Start: %v\n", err)
+			fmt.Printf("⚠️ [FAT AL] Dashboard Failed to Start: %v\n", err)
 		}
 	}()
 }
 
-const dashboardHTML = `
-<!DOCTYPE html>
+const dashboardHTML = `<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZenithAgent 2.0</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>ZenithAgent Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .glass-card { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(8px); border: 1px solid rgba(148, 163, 184, 0.1); }
-        .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .6; } }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 99px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #e2e8f0; min-height: 100vh; padding: 2rem; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
+        .logo { display: flex; align-items: center; gap: 1rem; }
+        .logo-icon { width: 48px; height: 48px; background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 16px rgba(6, 182, 212, 0.3); }
+        .logo-text h1 { font-size: 1.75rem; font-weight: 700; color: white; }
+        .logo-text p { font-size: 0.75rem; color: #94a3b8; font-weight: 500; letter-spacing: 1px; }
+        .status-badge { display: flex; align-items: center; gap: 0.75rem; background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); padding: 0.5rem 1rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #10b981; animation: pulse 2s ease-in-out infinite; position: relative; }
+        .status-dot::before { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; background: #10b981; opacity: 0.5; animation: ping 2s ease-in-out infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        @keyframes ping { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(2); opacity: 0; } }
+        @keyframes blink { 0%, 50%, 100% { opacity: 1; } 25%, 75% { opacity: 0.3; } }
+        .status-text { font-size: 0.75rem; font-weight: 600; color: #10b981; letter-spacing: 0.5px; }
+        .task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .task-card { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 16px; padding: 1.5rem; transition: all 0.3s ease; position: relative; overflow: hidden; }
+        .task-card::before { content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: rgba(255, 255, 255, 0.03); border-radius: 50%; filter: blur(40px); transform: translate(30%, -30%); }
+        .task-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3); border-color: rgba(148, 163, 184, 0.4); }
+        .task-card.running { border-color: rgba(6, 182, 212, 0.4); box-shadow: 0 8px 16px rgba(6, 182, 212, 0.2); }
+        .task-card.error { border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 8px 16px rgba(239, 68, 68, 0.2); }
+        .task-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; position: relative; }
+        .task-name { font-size: 1.125rem; font-weight: 600; color: white; margin-bottom: 0.5rem; }
+        .task-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.65rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+        .task-status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .task-status.running .task-status-dot { background: #06b6d4; animation: pulse 1.5s ease-in-out infinite; }
+        .task-status.running { color: #06b6d4; }
+        .task-status.idle .task-status-dot { background: #3b82f6; }
+        .task-status.idle { color: #3b82f6; }
+        .task-status.error .task-status-dot { background: #ef4444; animation: blink 1s ease-in-out infinite; }
+        .task-status.error { color: #ef4444; }
+        .task-time { font-size: 0.75rem; color: #94a3b8; background: rgba(15, 23, 42, 0.5); padding: 0.375rem 0.75rem; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.1); font-family: 'Courier New', monospace; }
+        .task-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .stat-box { background: rgba(15, 23, 42, 0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.1); transition: all 0.2s ease; }
+        .stat-box:hover { border-color: rgba(148, 163, 184, 0.3); }
+        .stat-label { font-size: 0.65rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem; }
+        .stat-value { font-size: 1.5rem; font-weight: 700; color: white; }
+        .stat-box.success .stat-value { color: #10b981; }
+        .stat-box.failed .stat-value { color: #ef4444; }
+        .error-badge { background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.75rem; border: 1px solid rgba(239, 68, 68, 0.3); margin-top: 0.5rem; font-weight: 500; }
+        .history-section { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 16px; overflow: hidden; max-height: 600px; display: flex; flex-direction: column; }
+        .history-header { padding: 1.25rem 1.5rem; background: rgba(15, 23, 42, 0.5); border-bottom: 1px solid rgba(148, 163, 184, 0.1); display: flex; justify-content: space-between; align-items: center; }
+        .history-title { font-size: 1.125rem; font-weight: 600; color: white; }
+        .history-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
+        .history-item { padding: 0.75rem 1rem; margin-bottom: 0.5rem; border-radius: 8px; display: flex; align-items: center; gap: 0.75rem; transition: all 0.2s ease; }
+        .history-item:hover { background: rgba(15, 23, 42, 0.4); }
+        .history-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .history-icon.success { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+        .history-icon.error { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+        .history-content { flex: 1; min-width: 0; }
+        .history-message { font-size: 0.875rem; font-weight: 500; color: #e2e8f0; margin-bottom: 0.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .history-meta { font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 0.5rem; }
+        .history-time { font-family: 'Courier New', monospace; background: rgba(15, 23, 42, 0.5); padding: 0.125rem 0.5rem; border-radius: 4px; }
+        .history-list::-webkit-scrollbar { width: 6px; }
+        .history-list::-webkit-scrollbar-track { background: transparent; }
+        .history-list::-webkit-scrollbar-thumb { background: #475569; border-radius: 999px; }
+        @media (max-width: 768px) { body { padding: 1rem; } .header { flex-direction: column; align-items: flex-start; } .task-grid { grid-template-columns: 1fr; } }
+        .loading { text-align: center; padding: 3rem; color: #94a3b8; }
+        .no-tasks { text-align: center; padding: 3rem; color: #94a3b8; font-size: 0.875rem; }
     </style>
 </head>
-<body class="bg-[#0f172a] text-slate-200 min-h-screen relative overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
-    
-    <!-- Background Glows -->
-    <div class="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div class="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px]"></div>
-        <div class="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-emerald-600/10 rounded-full blur-[120px] mix-blend-screen"></div>
-    </div>
-
-    <div class="max-w-6xl mx-auto p-6 md:p-8 relative z-10">
-        <!-- Header -->
-        <header class="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
-            <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-500/20 flex items-center justify-center">
-                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                        <path d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
                 </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-white tracking-tight">ZenithAgent <span class="text-cyan-400">2.0</span></h1>
-                    <p class="text-slate-400 text-xs font-medium tracking-wide">AUTONOMOUS STEALTH ENGINE</p>
+                <div class="logo-text">
+                    <h1>ZenithAgent <span style="color: #06b6d4;">Dashboard</span></h1>
+                    <p>AUTONOMOUS TASK MONITORING</p>
                 </div>
             </div>
-            
-            <div class="flex items-center gap-4">
-                <div class="glass px-4 py-2 rounded-full flex items-center gap-3 shadow-lg shadow-black/20">
-                    <div class="relative">
-                        <span class="flex h-3 w-3">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                        </span>
-                    </div>
-                    <span class="text-xs font-semibold text-emerald-400 tracking-wide" id="connection-status">SYSTEM ONLINE</span>
-                </div>
-                <div class="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer" title="Admin">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                </div>
+            <div class="status-badge">
+                <div class="status-dot"></div>
+                <span class="status-text" id="connection-status">SYSTEM ONLINE</span>
             </div>
-        </header>
-
-        <!-- Stats Overview -->
-        <div id="project-cards" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <!-- Dynamic Content -->
         </div>
-
-        <!-- History Log -->
-        <div class="glass rounded-2xl overflow-hidden shadow-2xl shadow-black/40 flex flex-col h-[500px]">
-            <div class="px-6 py-5 border-b border-slate-700/50 bg-slate-900/40 flex justify-between items-center backdrop-blur-md">
-                <div class="flex items-center gap-3">
-                    <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    </div>
-                    <h2 class="font-semibold text-lg text-white">Live Activity Log</h2>
-                </div>
-                <div class="flex items-center gap-2 text-xs font-mono text-slate-500">
-                    <span class="w-2 h-2 rounded-full bg-slate-600 animate-pulse"></span>
-                    SYNCING
-                </div>
+        <div class="task-grid" id="task-grid">
+            <div class="loading">Loading tasks...</div>
+        </div>
+        <div class="history-section">
+            <div class="history-header">
+                <h2 class="history-title">📊 Live Activity Log</h2>
+                <span style="font-size: 0.75rem; color: #64748b;">Auto-refresh: 3s</span>
             </div>
-            
-            <div id="history-list" class="flex-1 overflow-y-auto p-2 space-y-1">
-                <!-- Log Items -->
+            <div class="history-list" id="history-list">
+                <div class="no-tasks">Waiting for activity...</div>
             </div>
         </div>
     </div>
-
-    <!-- Scripts -->
     <script>
-        const statusEl = document.getElementById('connection-status');
-        const cardsContainer = document.getElementById('project-cards');
-        const historyContainer = document.getElementById('history-list');
-
-        function formatTime(isoString) {
-            return new Date(isoString).toLocaleTimeString('id-ID', { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' });
-        }
-
+        const taskGrid = document.getElementById('task-grid');
+        const historyList = document.getElementById('history-list');
+        const statusText = document.getElementById('connection-status');
         async function updateDashboard() {
             try {
-                const response = await fetch('/api/stats');
-                if (!response.ok) throw new Error('Auth Failed');
+                const response = await fetch('/api/projects');
+                if (!response.ok) throw new Error('Failed to fetch');
                 const data = await response.json();
-                
-                // Status Update
-                statusEl.innerText = "SYSTEM ONLINE";
-                statusEl.className = "text-xs font-semibold text-emerald-400 tracking-wide";
-
-                // Render Cards
-                cardsContainer.innerHTML = '';
-                if (data.projects) {
-                    for (const [name, stats] of Object.entries(data.projects)) {
-                        const isRunning = stats.is_running;
-                        const cardClass = isRunning ? 'border-cyan-500/30 shadow-lg shadow-cyan-900/20' : 'border-rose-500/20 opacity-90 grayscale-[0.3]';
-                        const statusDot = isRunning ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]' : 'bg-rose-500';
-                        const statusText = isRunning ? 'ACTIVE RUNNING' : 'PROCESS HALTED';
-                        const statusTextClass = isRunning ? 'text-cyan-400' : 'text-rose-400';
-
-                        cardsContainer.innerHTML += ` + "`" + `
-                            <div class="glass p-1 rounded-2xl transition-all duration-500 hover:translate-y-[-2px] ${cardClass}">
-                                <div class="bg-slate-900/60 rounded-xl p-6 h-full relative overflow-hidden group">
-                                    <div class="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl translate-x-10 translate-y-[-10px] group-hover:bg-white/10 transition-all duration-700"></div>
-                                    
-                                    <div class="flex justify-between items-start mb-6 relative">
-                                        <div>
-                                            <h3 class="text-lg font-bold text-white tracking-tight mb-1">${name}</h3>
-                                            <div class="flex items-center gap-2">
-                                                <span class="w-1.5 h-1.5 rounded-full ${statusDot} animate-pulse-slow"></span>
-                                                <span class="text-[10px] font-bold tracking-widest ${statusTextClass}">${statusText}</span>
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <p class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Last Cycle</p>
-                                            <p class="text-xs font-mono text-slate-300 bg-slate-800/80 px-2 py-1 rounded border border-slate-700/50 mt-1 inline-block">
-                                                ${new Date(stats.last_run).toLocaleTimeString('id-ID')}
-                                            </p>
+                statusText.textContent = 'SYSTEM ONLINE';
+                statusText.style.color = '#10b981';
+                if (data.projects && data.projects.length > 0) {
+                    taskGrid.innerHTML = data.projects.map(task => {
+                        const isRunning = task.is_running;
+                        const hasError = task.failed_count > 0 && !isRunning;
+                        const statusClass = isRunning ? 'running' : (hasError ? 'error' : 'idle');
+                        const statusTextLabel = isRunning ? 'Running' : (hasError ? 'Error' : 'Idle');
+                        const cardClass = isRunning ? 'running' : (hasError ? 'error' : '');
+                        return ` + "`" + `
+                            <div class="task-card ${cardClass}">
+                                <div class="task-header">
+                                    <div>
+                                        <h3 class="task-name">${task.name}</h3>
+                                        <div class="task-status ${statusClass}">
+                                            <div class="task-status-dot"></div>
+                                            <span>${statusTextLabel}</span>
                                         </div>
                                     </div>
-
-                                    <div class="grid grid-cols-2 gap-3 relative">
-                                        <div class="bg-slate-800/40 p-3 rounded-lg border border-emerald-500/10 hover:border-emerald-500/30 transition-colors group/stat">
-                                            <div class="flex items-center justify-between mb-1">
-                                                <p class="text-[10px] uppercase font-bold text-slate-500 group-hover/stat:text-emerald-400 transition-colors">Success</p>
-                                                <svg class="w-3 h-3 text-emerald-500 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
-                                            </div>
-                                            <p class="text-2xl font-black text-white group-hover/stat:text-emerald-300 transition-colors">${stats.success_count}</p>
-                                        </div>
-                                        <div class="bg-slate-800/40 p-3 rounded-lg border border-rose-500/10 hover:border-rose-500/30 transition-colors group/stat">
-                                            <div class="flex items-center justify-between mb-1">
-                                                <p class="text-[10px] uppercase font-bold text-slate-500 group-hover/stat:text-rose-400 transition-colors">Failures</p>
-                                                <svg class="w-3 h-3 text-rose-500 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                            </div>
-                                            <p class="text-2xl font-black text-white group-hover/stat:text-rose-300 transition-colors">${stats.failed_count}</p>
-                                        </div>
+                                    <div class="task-time">${task.last_run || 'Never'}</div>
+                                </div>
+                                <div class="task-stats">
+                                    <div class="stat-box success">
+                                        <div class="stat-label">✓ Success</div>
+                                        <div class="stat-value">${task.success_count}</div>
+                                    </div>
+                                    <div class="stat-box failed">
+                                        <div class="stat-label">✗ Failed</div>
+                                        <div class="stat-value">${task.failed_count}</div>
+                                    </div>
+                                </div>
+                                ${hasError ? '<div class="error-badge"><strong>⚠ Last Error:</strong> Check logs for details</div>' : ''}
+                            </div>
+                        ` + "`" + `;
+                    }).join('');
+                } else {
+                    taskGrid.innerHTML = '<div class="no-tasks">No tasks discovered</div>';
+                }
+                if (data.history && data.history.length > 0) {
+                    historyList.innerHTML = data.history.map(entry => {
+                        const isSuccess = entry.type === 'success';
+                        const iconClass = isSuccess ? 'success' : 'error';
+                        const icon = isSuccess ? '✓' : '✗';
+                        return ` + "`" + `
+                            <div class="history-item">
+                                <div class="history-icon ${iconClass}">${icon}</div>
+                                <div class="history-content">
+                                    <div class="history-message">${entry.message}</div>
+                                    <div class="history-meta">
+                                        <span>${entry.project}</span>
+                                        <span class="history-time">${entry.timestamp}</span>
                                     </div>
                                 </div>
                             </div>
                         ` + "`" + `;
-                    }
-                }
-
-                // Render History
-                if (data.history && data.history.length > 0) {
-                    historyContainer.innerHTML = data.history.map((entry, index) => {
-                        const isSuccess = entry.type === 'success';
-                        const iconBg = isSuccess ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400';
-                        const iconPath = isSuccess ? 'M5 13l4 4L19 7' : 'M6 18L18 6M6 6l12 12';
-                        const delay = index * 50; // Stagger animation
-                        
-                        return ` + "`" + `
-                        <div class="group mx-2 p-3 rounded-xl hover:bg-slate-800/50 transition-all border border-transparent hover:border-slate-700/50 flex items-start gap-4 animate-fade-in" style="animation-delay: ${delay}ms">
-                            <div class="mt-1 w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center shrink-0 border border-white/5 shadow-sm">
-                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="${iconPath}"></path></svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <div class="flex justify-between items-baseline mb-0.5">
-                                    <h4 class="text-sm font-semibold text-slate-200 group-hover:text-white truncate pr-4">${entry.message}</h4>
-                                    <span class="text-[10px] font-mono text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700/50 group-hover:border-slate-600 transition-colors whitespace-nowrap">${entry.timestamp}</span>
-                                </div>
-                                <p class="text-xs text-slate-500 font-medium tracking-wide flex items-center gap-1.5">
-                                    <span class="w-1 h-1 rounded-full bg-slate-600"></span>
-                                    ${entry.project}
-                                </p>
-                            </div>
-                        </div>
-                        ` + "`" + `
                     }).join('');
                 } else {
-                    historyContainer.innerHTML = ` + "`" + `
-                        <div class="flex flex-col items-center justify-center h-full text-slate-500 opacity-60">
-                            <svg class="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            <p class="text-sm font-medium">Waiting for activity...</p>
-                        </div>
-                    ` + "`" + `;
+                    historyList.innerHTML = '<div class="no-tasks">Waiting for activity...</div>';
                 }
-
-            } catch (e) {
-                console.error(e);
-                statusEl.innerText = "OFFLINE";
-                statusEl.parentElement.className = "bg-rose-950/30 px-4 py-2 rounded-full flex items-center gap-3 border border-rose-500/20";
-                statusEl.className = "text-xs font-semibold text-rose-500 tracking-wide";
-                statusEl.previousElementSibling.firstElementChild.className = "absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-20";
-                statusEl.previousElementSibling.lastElementChild.className = "relative inline-flex rounded-full h-3 w-3 bg-rose-600";
+            } catch (error) {
+                console.error('Dashboard error:', error);
+                statusText.textContent = 'OFFLINE';
+                statusText.style.color = '#ef4444';
+                taskGrid.innerHTML = '<div class="no-tasks">Connection error</div>';
             }
         }
-
-        setInterval(updateDashboard, 3000);
         updateDashboard();
+        setInterval(updateDashboard, 3000);
     </script>
 </body>
 </html>

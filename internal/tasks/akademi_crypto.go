@@ -52,8 +52,62 @@ func ExecuteAkademiCrypto(bm *engine.BrowserManager) error {
 		return fmt.Errorf(errMsg)
 	}
 
-	// Wait for page to load
-	time.Sleep(3 * time.Second)
+	// Check if Cloudflare challenge is present
+	fmt.Println("[AKADEMI CRYPTO] Checking for Cloudflare challenge...")
+	challengePresent := false
+	
+	// Look for Cloudflare challenge indicators
+	challengeSelectors := []string{
+		"#challenge-error-text",
+		".main-wrapper",
+		"h1.zone-name-title",
+	}
+	
+	for _, selector := range challengeSelectors {
+		if elem, err := page.QuerySelector(selector); err == nil && elem != nil {
+			if visible, _ := elem.IsVisible(); visible {
+				challengePresent = true
+				fmt.Println("[AKADEMI CRYPTO] Cloudflare challenge detected, waiting for verification...")
+				break
+			}
+		}
+	}
+
+	if challengePresent {
+		// Wait for Cloudflare to complete verification
+		// Cloudflare Turnstile usually takes 5-10 seconds
+		fmt.Println("[AKADEMI CRYPTO] Waiting for Cloudflare Turnstile verification...")
+		time.Sleep(15 * time.Second)
+		
+		// Wait for the actual content to load (form should appear)
+		fmt.Println("[AKADEMI CRYPTO] Waiting for page content to load...")
+		_, err = page.WaitForSelector("#user_first_name1", playwright.PageWaitForSelectorOptions{
+			Timeout: playwright.Float(30000),
+			State:   playwright.WaitForSelectorStateVisible,
+		})
+		if err != nil {
+			// If still blocked, try reloading
+			fmt.Println("[AKADEMI CRYPTO] Still blocked, attempting reload...")
+			page.Reload(playwright.PageReloadOptions{
+				WaitUntil: playwright.WaitUntilStateLoad,
+			})
+			time.Sleep(15 * time.Second)
+		}
+	} else {
+		// No challenge, just wait for page to load normally
+		time.Sleep(3 * time.Second)
+	}
+
+	// Verify we're past Cloudflare
+	pageTitle, _ := page.Title()
+	if pageTitle == "Just a moment..." {
+		errMsg := "Failed to bypass Cloudflare challenge"
+		fmt.Printf("[AKADEMI CRYPTO] %s\n", errMsg)
+		GlobalUpdateStats(projectName, false, errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	fmt.Println("[AKADEMI CRYPTO] ✓ Successfully bypassed Cloudflare (if present)")
 
 	// Generate random user data
 	names := []string{"Andi Pratama", "Budi Santoso", "Cahyo Nugroho", "Deni Saputra", "Eko Wibowo", "Fajar Ramadhan", "Gilang Saputra", "Hendra Wijaya", "Irfan Maulana", "Joko Susilo"}
