@@ -540,8 +540,13 @@ func detectOTP(page playwright.Page, timeout int) (bool, string) {
 func ExecuteAlmai(bm *engine.BrowserManager) error {
 	fmt.Println("\n=== ALMAI BOT: Automated Registration ===")
 
+	// Almai.id blocks Tor (via Monarx/WAF), so we must bypass proxy
+	bm.UseProxy = false
+	defer func() { bm.UseProxy = true }() // Restore for other potential reused managers
+
 	// Set project status to running
 	SetProjectStatus("Almai", true)
+
 	defer SetProjectStatus("Almai", false)
 
 	// Ensure directory structure exists

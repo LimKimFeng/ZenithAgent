@@ -6,10 +6,14 @@ import (
 
 type BrowserManager struct {
 	Headless bool
+	UseProxy bool
 }
 
 func NewBrowserManager(headless bool) *BrowserManager {
-	return &BrowserManager{Headless: headless}
+	return &BrowserManager{
+		Headless: headless,
+		UseProxy: true, // Default to true for backward compatibility
+	}
 }
 
 func (bm *BrowserManager) CreateContext() (*playwright.Playwright, playwright.Browser, playwright.BrowserContext, error) {
@@ -18,16 +22,21 @@ func (bm *BrowserManager) CreateContext() (*playwright.Playwright, playwright.Br
 		return nil, nil, nil, err
 	}
 
-	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
+	launchOptions := playwright.BrowserTypeLaunchOptions{
 		Headless: playwright.Bool(bm.Headless),
 		Args: []string{
 			"--disable-blink-features=AutomationControlled",
 			"--no-sandbox",
 		},
-		Proxy: &playwright.Proxy{
+	}
+
+	if bm.UseProxy {
+		launchOptions.Proxy = &playwright.Proxy{
 			Server: "socks5://127.0.0.1:9050",
-		},
-	})
+		}
+	}
+
+	browser, err := pw.Chromium.Launch(launchOptions)
 	if err != nil {
 		pw.Stop()
 		return nil, nil, nil, err
